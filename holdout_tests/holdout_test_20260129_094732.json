@@ -1,0 +1,26 @@
+{
+  "config": {
+    "holdout_size": 500,
+    "window_length": 64,
+    "latent_dim": 128,
+    "batch_size": 32,
+    "n_exclude": 12,
+    "n_keep": 27,
+    "max_epochs": 30,
+    "patience": 5,
+    "device": "cpu"
+  },
+  "holdout_size": 500,
+  "wrong_distribution": {
+    "0": 79,
+    "1": 185,
+    "2": 168,
+    "3": 61,
+    "4": 7
+  },
+  "avg_wrong": 1.464,
+  "perfect_rate": 15.8,
+  "good_rate": 52.800000000000004,
+  "next_prediction": {
+    "likely_27": [
+      
