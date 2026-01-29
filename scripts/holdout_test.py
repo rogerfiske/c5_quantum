@@ -2,8 +2,8 @@
 """
 Strict Holdout Test - 500 most recent events with complete isolation.
 
+Uses original pipeline: 20 excluded / 19 remaining candidates.
 Ensures NO data leakage from holdout set into training/predictions.
-Reports pooled most likely numbers and holdout accuracy.
 """
 
 import numpy as np
@@ -19,19 +19,26 @@ from pathlib import Path
 
 print('=' * 60)
 print('  STRICT HOLDOUT TEST - 500 Most Recent Events')
+print('  Configuration: 20 excluded / 19 remaining candidates')
 print('=' * 60)
 print()
 
-# Configuration
+# Configuration - matches original pipeline
 CONFIG = {
     'holdout_size': 500,
     'window_length': 64,
     'latent_dim': 128,
     'batch_size': 32,
-    'n_exclude': 12,  # Exclude 12, keep 27 most likely
-    'n_keep': 27,
+    'n_exclude': 20,  # Original: exclude 20
+    'n_keep': 19,     # Original: keep 19 candidates
     'max_epochs': 30,
     'patience': 5,
+    'fusion_weights': {
+        'base': 0.50,
+        'rarity': 0.25,
+        'spectral': 0.15,
+        'recency': 0.10
+    },
     'device': 'cpu'
 }
 
@@ -101,7 +108,7 @@ def load_data():
 def get_actual_top5(row):
     """Get the 5 QVs with highest values (1-indexed)."""
     top5_idx = np.argsort(row)[-5:]
-    return set(idx + 1 for idx in top5_idx)
+    return set(int(idx + 1) for idx in top5_idx)
 
 
 def create_windows(data, window_length, stride=4):
@@ -183,8 +190,8 @@ def train_model(train_data, device):
     return encoder, classifier
 
 
-def predict_most_likely(encoder, classifier, window, history, device):
-    """Predict most likely QVs (returns indices of top N_KEEP)."""
+def compute_exclusion_scores(encoder, classifier, window, history, device):
+    """Compute exclusion scores using original fusion method."""
     encoder.eval()
     classifier.eval()
 
@@ -192,17 +199,58 @@ def predict_most_likely(encoder, classifier, window, history, device):
         X = torch.from_numpy(window).unsqueeze(0).to(device)
         p_occur = classifier(encoder(X)).squeeze().cpu().numpy()
 
-    # Add rarity bonus from recent history
-    if len(history) > 0:
-        recent_freq = history[-100:].mean(axis=0) if len(history) >= 100 else history.mean(axis=0)
-        # Combine model prediction with frequency (higher freq = more likely)
-        combined = 0.7 * p_occur + 0.3 * recent_freq
-    else:
-        combined = p_occur
+    # Base non-occurrence score
+    s_base = 1.0 - p_occur
 
-    # Get top 27 most likely (1-indexed)
-    top_indices = np.argsort(combined)[-CONFIG['n_keep']:]
-    return set(idx + 1 for idx in top_indices), combined
+    # Rarity from recent history
+    if len(history) >= 10:
+        recent = history[-50:] if len(history) >= 50 else history
+        mean_prob = recent.mean(axis=0)
+        s_rarity = 1.0 - mean_prob
+        s_rarity = (s_rarity - s_rarity.min()) / (s_rarity.max() - s_rarity.min() + 1e-8)
+    else:
+        s_rarity = np.zeros(39)
+
+    # Spectral component (simplified)
+    if len(history) >= 50:
+        hist_fft = np.fft.fft(history.mean(axis=0))
+        recent_fft = np.fft.fft(history[-50:].mean(axis=0))
+        s_spectral = np.abs(np.abs(recent_fft) - np.abs(hist_fft))
+        s_spectral = (s_spectral - s_spectral.min()) / (s_spectral.max() - s_spectral.min() + 1e-8)
+    else:
+        s_spectral = np.zeros(39)
+
+    # Recency (not appeared in last 10)
+    if len(history) >= 10:
+        recent_10 = history[-10:]
+        s_recency = 1.0 - (recent_10 > 0.05).any(axis=0).astype(np.float32)
+    else:
+        s_recency = np.zeros(39)
+
+    # Fused score (original weights)
+    w = CONFIG['fusion_weights']
+    s_fused = (
+        w['base'] * s_base +
+        w['rarity'] * s_rarity +
+        w['spectral'] * s_spectral +
+        w['recency'] * s_recency
+    )
+
+    return s_fused
+
+
+def predict_exclusions(encoder, classifier, window, history, device):
+    """Predict excluded QVs (top 20 by exclusion score)."""
+    s_fused = compute_exclusion_scores(encoder, classifier, window, history, device)
+
+    # Top 20 exclusions (highest exclusion scores = least likely to occur)
+    exclusion_indices = np.argsort(s_fused)[-CONFIG['n_exclude']:]
+    excluded_qvs = set(int(idx + 1) for idx in exclusion_indices)
+
+    # Remaining 19 candidates
+    remaining_qvs = set(range(1, 40)) - excluded_qvs
+
+    return excluded_qvs, remaining_qvs, s_fused
 
 
 def run_holdout_test():
@@ -240,7 +288,6 @@ def run_holdout_test():
 
     results = []
     wrong_counts = Counter()
-    all_predictions = []
 
     window_len = CONFIG['window_length']
 
@@ -255,56 +302,53 @@ def run_holdout_test():
         window = available_data[-window_len:].astype(np.float32)
         history = available_data[:-window_len] if len(available_data) > window_len else available_data
 
-        # Predict
-        predicted_likely, scores = predict_most_likely(encoder, classifier, window, history, device)
+        # Predict exclusions
+        excluded_qvs, remaining_qvs, scores = predict_exclusions(
+            encoder, classifier, window, history, device
+        )
 
         # Get actual winners for this event
         actual_qvs = get_actual_top5(holdout_raw[i])
 
-        # Count wrong (actual winners NOT in predicted likely set)
-        wrong = len(actual_qvs - predicted_likely)
+        # Count wrong: actual winners that were EXCLUDED (false positives)
+        wrong = len(actual_qvs & excluded_qvs)
         wrong_counts[wrong] += 1
 
         results.append({
             'event_idx': holdout_start + i,
             'date': str(holdout_dates[i]),
-            'predicted_likely': sorted(predicted_likely),
+            'excluded': sorted(excluded_qvs),
+            'remaining': sorted(remaining_qvs),
             'actual': sorted(actual_qvs),
             'wrong': wrong
         })
-        all_predictions.append(scores)
 
         if (i + 1) % 100 == 0:
             print(f'  Processed {i+1}/{CONFIG["holdout_size"]} events...')
 
-    # Compute pooled prediction for NEXT event
+    # Compute final prediction for NEXT event
     print()
-    print('Computing pooled prediction for next event...')
+    print('Computing prediction for next event...')
 
-    # Use all available data for final prediction
     all_data = data_norm
     final_window = all_data[-window_len:].astype(np.float32)
     final_history = all_data[:-window_len]
-    next_likely, next_scores = predict_most_likely(encoder, classifier, final_window, final_history, device)
+    final_excluded, final_remaining, final_scores = predict_exclusions(
+        encoder, classifier, final_window, final_history, device
+    )
 
-    # Get excluded QVs
-    excluded = set(range(1, 40)) - next_likely
-
-    return results, wrong_counts, sorted(next_likely), sorted(excluded), next_scores
+    return results, wrong_counts, sorted(final_excluded), sorted(final_remaining)
 
 
 def main():
-    results, wrong_counts, next_likely, excluded, scores = run_holdout_test()
+    results, wrong_counts, excluded_qvs, remaining_qvs = run_holdout_test()
 
     total = sum(wrong_counts.values())
 
     print()
     print('=' * 60)
     print(f'  Pooled {CONFIG["n_keep"]} Most Likely numbers next prediction')
-    print(f'  {sorted(next_likely)}')
-    print()
-    print(f'  Excluded {CONFIG["n_exclude"]} numbers:')
-    print(f'  {sorted(excluded)}')
+    print(f'  {remaining_qvs}')
     print()
     print('  HOLDOUT TEST SUMMARY - 500 most recent events')
     print('-' * 60)
@@ -325,6 +369,9 @@ def main():
     print(f'  Perfect (0 wrong): {perfect_rate:.1f}%')
     print(f'  Good (0-1 wrong): {good_rate:.1f}%')
     print('=' * 60)
+    print()
+    print(f'  Excluded {CONFIG["n_exclude"]} QVs: {excluded_qvs}')
+    print(f'  Remaining {CONFIG["n_keep"]} QVs: {remaining_qvs}')
 
     # Save results
     output_dir = Path('holdout_tests')
@@ -333,15 +380,20 @@ def main():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     summary = {
-        'config': CONFIG,
-        'holdout_size': total,
-        'wrong_distribution': {str(k): v for k, v in sorted(wrong_counts.items())},
-        'avg_wrong': avg_wrong,
-        'perfect_rate': perfect_rate,
-        'good_rate': good_rate,
+        'config': {
+            'holdout_size': int(CONFIG['holdout_size']),
+            'window_length': int(CONFIG['window_length']),
+            'n_exclude': int(CONFIG['n_exclude']),
+            'n_keep': int(CONFIG['n_keep']),
+            'fusion_weights': CONFIG['fusion_weights']
+        },
+        'wrong_distribution': {str(k): int(v) for k, v in sorted(wrong_counts.items())},
+        'avg_wrong': float(avg_wrong),
+        'perfect_rate': float(perfect_rate),
+        'good_rate': float(good_rate),
         'next_prediction': {
-            'likely_27': next_likely,
-            'excluded_12': excluded
+            'excluded_qvs': [int(x) for x in excluded_qvs],
+            'remaining_qvs': [int(x) for x in remaining_qvs]
         },
         'timestamp': datetime.now().isoformat()
     }
