@@ -1,0 +1,68 @@
+{
+  "prediction_date": "2026-01-30",
+  "prediction_made_at": "2026-01-29T09:23:00",
+  "model_version": "c5_raincoat_v20260129_091822",
+  "input_window_end": "2026-01-28",
+  "input_window_events": 64,
+
+  "excluded_qvs": [3, 4, 9, 10, 12, 14, 17, 19, 20, 21, 23, 24, 25, 26, 27, 29, 34, 37, 38, 39],
+  "remaining_qvs": [1, 2, 5, 6, 7, 8, 11, 13, 15, 16, 18, 22, 28, 30, 31, 32, 33, 35, 36],
+
+  "exclusion_ranking": [
+    {"rank": 1, "qv": 12, "fused_score": 1.0000, "base": 0.5771, "rarity": 0.6571, "spectral": 0.7842},
+    {"rank": 2, "qv": 29, "fused_score": 0.9713, "base": 0.4944, "rarity": 0.7714, "spectral": 0.7842},
+    {"rank": 3, "qv": 21, "fused_score": 0.9548, "base": 0.6499, "rarity": 0.8571, "spectral": 0.7409},
+    {"rank": 4, "qv": 27, "fused_score": 0.8433, "base": 0.6809, "rarity": 0.6286, "spectral": 0.6876},
+    {"rank": 5, "qv": 26, "fused_score": 0.8104, "base": 0.5546, "rarity": 0.4286, "spectral": 0.6779},
+    {"rank": 6, "qv": 19, "fused_score": 0.8029, "base": 0.5512, "rarity": 0.6286, "spectral": 1.0000},
+    {"rank": 7, "qv": 14, "fused_score": 0.7815, "base": 0.5687, "rarity": 0.3429, "spectral": 0.6876},
+    {"rank": 8, "qv": 24, "fused_score": 0.7694, "base": 0.5615, "rarity": 0.5143, "spectral": 0.3903},
+    {"rank": 9, "qv": 34, "fused_score": 0.7402, "base": 0.5623, "rarity": 0.7714, "spectral": 0.5391},
+    {"rank": 10, "qv": 23, "fused_score": 0.7238, "base": 0.5142, "rarity": 1.0000, "spectral": 0.2698},
+    {"rank": 11, "qv": 17, "fused_score": 0.6972, "base": 0.6258, "rarity": 0.2571, "spectral": 0.3903},
+    {"rank": 12, "qv": 4, "fused_score": 0.6736, "base": 0.6160, "rarity": 0.3714, "spectral": 0.8291},
+    {"rank": 13, "qv": 9, "fused_score": 0.6703, "base": 0.3834, "rarity": 0.5429, "spectral": 0.6424},
+    {"rank": 14, "qv": 37, "fused_score": 0.6605, "base": 0.5187, "rarity": 0.5429, "spectral": 0.8291},
+    {"rank": 15, "qv": 25, "fused_score": 0.6373, "base": 0.6375, "rarity": 0.3714, "spectral": 0.6498},
+    {"rank": 16, "qv": 39, "fused_score": 0.6267, "base": 0.4863, "rarity": 0.6857, "spectral": 0.5983},
+    {"rank": 17, "qv": 3, "fused_score": 0.5737, "base": 0.4008, "rarity": 0.5143, "spectral": 0.3453},
+    {"rank": 18, "qv": 10, "fused_score": 0.5641, "base": 0.5771, "rarity": 0.4857, "spectral": 0.4434},
+    {"rank": 19, "qv": 20, "fused_score": 0.5477, "base": 0.4875, "rarity": 0.4571, "spectral": 0.7409},
+    {"rank": 20, "qv": 38, "fused_score": 0.5231, "base": 0.6414, "rarity": 0.3429, "spectral": 0.3453}
+  ],
+
+  "confidence_metrics": {
+    "mean_exclusion_score": 0.7286,
+    "score_gap_at_cutoff": 0.0125,
+    "risk_controls": ["gap_warning", "adjacency_warning"]
+  },
+
+  "fusion_weights": {
+    "base": 0.50,
+    "rarity": 0.25,
+    "spectral": 0.15,
+    "recency": 0.10
+  },
+
+  "model_training_metrics": {
+    "stage_a_val_loss": 0.6846,
+    "stage_b_final_mmd": 0.1040,
+    "stage_c_recon_loss": 0.0069,
+    "embedding_movement_pct": 14.6
+  },
+
+  "backtest_performance": {
+    "fp_at_20_mean": 2.28,
+    "random_baseline": 2.56,
+    "improvement_pct": 11.0,
+    "perfect_rate_pct": 4.1
+  },
+
+  "validation": {
+    "actual_qvs": null,
+    "false_positives": null,
+    "fp_count": null,
+    "validated_at": null,
+    "result": null
+  }
+}

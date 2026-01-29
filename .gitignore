@@ -10,12 +10,16 @@ venv/
 
 # Data files (large)
 *.npy
-*.csv
 *.parquet
 *.index
 data/raw/
 data/prepared/
 data/quantumized/
+
+# Keep predictions for version control
+!data/predictions/
+!data/predictions/**/*.json
+!data/predictions/**/*.md
 
 # Model checkpoints (large)
 models/*.pth
@@ -32,8 +36,8 @@ Thumbs.db
 # Logs
 logs/
 
-# Predictions
-predictions/
+# Predictions (temporary/working files only)
+predictions/*.tmp
 
 # Backtests
 backtests/
