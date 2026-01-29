@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# Data files (large)
+*.npy
+*.csv
+*.parquet
+*.index
+data/raw/
+data/prepared/
+data/quantumized/
+
+# Model checkpoints (large)
+models/*.pth
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+
+# Predictions
+predictions/
+
+# Backtests
+backtests/
